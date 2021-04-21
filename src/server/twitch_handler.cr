@@ -22,19 +22,23 @@ module TwitchEventSub
 
       def handle_verification(context)
         request = context.request
-        body = request.body.read
+        request_body = request.body
+        return if request_body.nil?
+
+        body = request_body.gets(delimiter: "\x00").to_s
         params = JSON.parse(body)
 
         challenge = params["challenge"]?
         if challenge
-          conext.response.respond_with_status(
+          context.response.respond_with_status(
             status: 200,
-            message: challenge.as(String)
+            message: challenge.as_s
           )
         end
       end
 
       def handle_request(context)
+        puts "handle_request: #{context.inspect}"
       end
 
     end

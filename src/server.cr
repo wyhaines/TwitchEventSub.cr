@@ -6,7 +6,7 @@ module TwitchEventSub
     def initialize(
       @host : String,
       @port : Int32,
-      @context : OpenSSL::SSL::Context::Server
+      @context : OpenSSL::SSL::Context::Server? = nil
     )
       @server = HTTP::Server.new([
         HTTP::ErrorHandler.new,
@@ -18,8 +18,17 @@ module TwitchEventSub
     end
 
     private def bind_server
-      @server.bind_tls(host: @host, port: @port, context: @context)
+      context = @context
+      if context
+        @server.bind_tls(host: @host, port: @port, context: context)
+      else
+        @server.bind_tcp(host: @host, port: @port)
+      end
     end
 
+    def listen
+      @server.listen
+    end
+    
   end
 end
