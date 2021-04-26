@@ -12,7 +12,7 @@ module TwitchEventSub
         HTTP::ErrorHandler.new,
         HTTP::LogHandler.new,
         HTTP::CompressHandler.new,
-        TwitchEventSub::HttpServer::TwitchHandler.new
+        TwitchEventSub::HttpServer::TwitchHandler.new,
       ])
       bind_server
     end
@@ -29,6 +29,5 @@ module TwitchEventSub
     def listen
       @server.listen
     end
-    
   end
 end
