@@ -2,6 +2,8 @@ require "json"
 require "./twitch_eventsub_subscription"
 
 module TwitchEventSub
+  # This class wraps up a list of subscriptions, allowing them to be
+  # serialized and deserialized.
   class TwitchEventSubSubscriptions
     include JSON::Serializable
     include JSON::Serializable::Unmapped

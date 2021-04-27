@@ -2,10 +2,14 @@ require "http/server"
 require "./server/*"
 
 module TwitchEventSub
+  # To Handle EventSub notifications and interactions, an HTTP Server
+  # must be running to receive the callbacks. This class encapsulates
+  # a very simple HTTP server that binds a TwitchHandler to the server
+  # stack for handling those requests.
   class HttpServer
     def initialize(
-      @host : String,
-      @port : Int32,
+      @host : String = "127.0.0.1",
+      @port : Int32 = 8080,
       @context : OpenSSL::SSL::Context::Server? = nil
     )
       @server = HTTP::Server.new([

@@ -1,6 +1,8 @@
 require "json"
 
 module TwitchEventSub
+  # This class encapsulates all of the data for a subscription, allowing
+  # it to be serialized and deserialized.
   class TwitchEventSubSubscription
     include JSON::Serializable
     include JSON::Serializable::Unmapped

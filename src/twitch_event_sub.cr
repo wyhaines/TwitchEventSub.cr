@@ -135,7 +135,7 @@ pp slist
 slist.data.each do |sub|
   next unless sub.status == "webhook_callback_verification_failed"
   puts "UNSUBSCRIBE:"
-   pp sub
+  pp sub
   subs.unsubscribe(sub)
 end
 
