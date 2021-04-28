@@ -8,13 +8,11 @@ module TwitchEventSub
   EVENTSUB_ENDPOINT = API_ENDPOINT + "eventsub/"
 
   class Subscriptions
-    @@secrets = {} of String => String
-
-    def self.secrets
-      @@secrets
+    def secrets
+      @secret_store
     end
 
-    def initialize(@client_id : String, @authorization : String)
+    def initialize(@client_id : String, @authorization : String, @secret_store = {} of String => String)
     end
 
     def list
@@ -37,7 +35,7 @@ module TwitchEventSub
       # Save the secret that was used.
       response_params = TwitchEventSubSubscriptions.from_json(response.body)
       response_params["data"].as_a.each do |subscription|
-        Subscriptions.secrets[subscription.as_h["id"]] = secret
+        secrets[subscription.as_h["id"]] = secret
       end
     end
 
