@@ -1,4 +1,5 @@
 require "./*"
+require "uuid"
 
 module TwitchEventSub
   VERSION = "0.1.0"
@@ -7,6 +8,12 @@ module TwitchEventSub
   EVENTSUB_ENDPOINT = API_ENDPOINT + "eventsub/"
 
   class Subscriptions
+    @@secrets = {} of String => String
+
+    def self.secrets
+      @@secrets
+    end
+
     def initialize(@client_id : String, @authorization : String)
     end
 
@@ -15,14 +22,23 @@ module TwitchEventSub
       TwitchEventSubSubscriptions.from_json(get(url).body)
     end
 
+    def generate_secret
+      UUID.random.to_s
+    end
+
     def subscribe(type : String, channel : String)
       id = broadcast_channel_id(channel)
       return if id.nil?
 
-      response = send_subscription_request(id, type: type, channel: channel)
+      secret = generate_secret
+      response = send_subscription_request(id, type: type, channel: channel, secret: secret)
       return unless verification_pending?(response)
 
-      puts response.inspect
+      # Save the secret that was used.
+      response_params = TwitchEventSubSubscriptions.from_json(response.body)
+      response_params["data"].as_a.each do |subscription|
+        Subscriptions.secrets[subscription.as_h["id"]] = secret
+      end
     end
 
     def unsubscribe(subscription)
@@ -33,14 +49,14 @@ module TwitchEventSub
       )
     end
 
-    private def send_subscription_request(id : String, type : String, channel : String)
+    private def send_subscription_request(id : String, type : String, channel : String, secret : String)
       subscription_request = TwitchSubscriptionRequest.blank_obj
       subscription_request.type = type
       subscription_request.condition = {"broadcaster_user_id" => id}
       subscription_request.transport = {
         "method"   => "webhook",
         "callback" => "https://wyhaines.pagekite.me/eventsub/subscription",
-        "secret"   => "iamnotasecret",
+        "secret"   => secret,
       }
 
       url = "#{EVENTSUB_ENDPOINT}subscriptions"

@@ -6,6 +6,9 @@ module TwitchEventSub
   # must be running to receive the callbacks. This class encapsulates
   # a very simple HTTP server that binds a TwitchHandler to the server
   # stack for handling those requests.
+
+  @@secrets = Hash(String, String).new
+
   class HttpServer
     def initialize(
       @host : String = "127.0.0.1",
