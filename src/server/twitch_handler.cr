@@ -9,11 +9,15 @@ module TwitchEventSub
     class TwitchHandler
       include HTTP::Handler
 
+      def initialize(@secrets : SecretSuperclass)
+        super()
+      end
+
       def call(context)
         if verification?(context)
-          handle_verification(context)
+          do_verification(context)
         else
-          handle_request(context)
+          do_request(context)
         end
 
         call_next(context) unless self.next.nil?
@@ -23,13 +27,23 @@ module TwitchEventSub
         context.request.headers["Twitch-Eventsub-Message-Type"]? == "webhook_callback_verification"
       end
 
-      def handle_verification(context)
+      def parse_context(context)
         request = context.request
         request_body = request.body
-        return if request_body.nil?
+        if request_body.nil?
+          body = nil
+          params = JSON.parse("{}")
+        else
+          body = request_body.gets_to_end
+          params = JSON.parse(body)
+        end
 
-        body = request_body.gets_to_end
-        params = JSON.parse(body)
+        return {request, body, params}
+      end
+
+      def do_verification(context)
+        request, body, params = parse_context(context)
+        return if body.nil?
 
         challenge = params["challenge"]?
         if challenge
@@ -45,7 +59,7 @@ module TwitchEventSub
       end
 
       def secret(id)
-        Subscriptions.secrets[id]
+        @secrets[id]
       end
 
       # Compare the signature passed as a param to the HMAC-SHA256 signature
@@ -66,9 +80,25 @@ module TwitchEventSub
         signature == calculated_signature
       end
 
-      def handle_request(context)
-        puts "handle_request: #{context.inspect}"
+      macro dispatch(type, params)
+        case {{ type.id }}
+        {% for method in @type.methods %}
+          {% if method.name =~ /^handle_/ %}
+        when "{{ method.name.gsub(/^handle_/, "") }}" then {{ method.name.id }}({{ params.id }})
+          {% end %}
+          {% end %}
+        else
+          raise "Method Missing: handle_#{ {{ type.id }} }"
+        end
       end
+
+      def do_request(context)
+        request, body, params = parse_context(context)
+        return if body.nil?
+
+        dispatch(params["type"].as_s.tr(".", "_"), params)
+      end
+
     end
   end
 end

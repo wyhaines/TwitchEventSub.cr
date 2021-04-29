@@ -8,11 +8,35 @@ module TwitchEventSub
   EVENTSUB_ENDPOINT = API_ENDPOINT + "eventsub/"
 
   class Subscriptions
-    def secrets
-      @secret_store
+    property server_finished_running : Channel(Nil) = Channel(Nil).new(1)
+    property http_server : TwitchEventSub::HttpServer
+
+    def initialize(
+      @client_id : String,
+      @authorization : String,
+      @secret_store = SecretStore.new,
+      host : String = "127.0.0.1",
+      port : Int32 = 8080,
+      context : OpenSSL::SSL::Context::Server? = nil
+    )
+      @http_server = TwitchEventSub::HttpServer.new(
+        host: host,
+        port: port,
+        context: context,
+        secrets: @secret_store
+      )
+      spawn_server_listener
     end
 
-    def initialize(@client_id : String, @authorization : String, @secret_store = {} of String => String)
+    private def spawn_server_listener
+      spawn(name: "Twitch HTTP Server") do
+        @http_server.listen
+        @server_finished_running.send(nil)
+      end
+    end
+
+    def secrets
+      @secret_store
     end
 
     def list
@@ -131,19 +155,11 @@ module TwitchEventSub
   end
 end
 
-server = TwitchEventSub::HttpServer.new(
-  host: "127.0.0.1",
-  port: 8080
+subs = TwitchEventSub::Subscriptions.new(
+  client_id: "020dnmxyu7eqpinwpkp9fnnlwa9igy",
+  authorization: ENV["TWITCH_APP_ACCESS_TOKEN"]
 )
 
-finished_running = Channel(Nil).new(1)
-
-spawn(name: "Twitch HTTP Server") do
-  server.listen
-  finished_running.send(nil)
-end
-
-subs = TwitchEventSub::Subscriptions.new("020dnmxyu7eqpinwpkp9fnnlwa9igy", ENV["TWITCH_APP_ACCESS_TOKEN"])
 slist = subs.list
 pp slist
 slist.data.each do |sub|
@@ -158,4 +174,4 @@ pp subs.list
 # subs.broadcast_channel_id("wyhaines")
 # puts "subscribe"
 # subs.subscribe("channel.follow", "wyhaines")
-# finished_running.receive
+subs.server_finished_running.receive
