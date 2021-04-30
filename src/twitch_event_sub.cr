@@ -17,13 +17,15 @@ module TwitchEventSub
       @secret_store = SecretStore.new,
       host : String = "127.0.0.1",
       port : Int32 = 8080,
-      context : OpenSSL::SSL::Context::Server? = nil
+      context : OpenSSL::SSL::Context::Server? = nil,
+      handler = TwitchEventSub::HttpServer::TwitchHandler
     )
       @http_server = TwitchEventSub::HttpServer.new(
         host: host,
         port: port,
         context: context,
-        secrets: @secret_store
+        secrets: @secret_store,
+        handler: handler
       )
       spawn_server_listener
     end
@@ -155,9 +157,16 @@ module TwitchEventSub
   end
 end
 
+class TestHandler < TwitchEventSub::HttpServer::TwitchHandler
+  def handle_channel_follow(params)
+    puts params.inspect
+  end
+end
+
 subs = TwitchEventSub::Subscriptions.new(
   client_id: "020dnmxyu7eqpinwpkp9fnnlwa9igy",
-  authorization: ENV["TWITCH_APP_ACCESS_TOKEN"]
+  authorization: ENV["TWITCH_APP_ACCESS_TOKEN"],
+  handler: TestHandler
 )
 
 slist = subs.list

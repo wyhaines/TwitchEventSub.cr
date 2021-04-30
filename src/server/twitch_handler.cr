@@ -5,7 +5,11 @@ require "json"
 module TwitchEventSub
   class HttpServer
     # The TwitchHandler encapsulates the logic necessary to handle callbacks
-    # from Twitch.
+    # from Twitch. This class should be subclassed with `handle_TYPE` methods
+    # defined for each type of Twitch notification that will be handled.
+    # For example, to monitor channel follow events, the subscription type
+    # from Twitch is `channel.follow`. The corresponding method to handle this
+    # event type would be `handle_channel_follow`.
     class TwitchHandler
       include HTTP::Handler
 
@@ -86,9 +90,9 @@ module TwitchEventSub
           {% if method.name =~ /^handle_/ %}
         when "{{ method.name.gsub(/^handle_/, "") }}" then {{ method.name.id }}({{ params.id }})
           {% end %}
-          {% end %}
+        {% end %}
         else
-          raise "Method Missing: handle_#{ {{ type.id }} }"
+          raise NotImplementedError.new("handle_#{ {{ type.id }} }")
         end
       end
 
@@ -96,9 +100,18 @@ module TwitchEventSub
         request, body, params = parse_context(context)
         return if body.nil?
 
-        dispatch(params["type"].as_s.tr(".", "_"), params)
+        handled = true
+        handled = dispatch(params["type"].as_s.tr(".", "_"), params)
+      rescue NotImplementedError
+        # Do nothing if the notification type does not have a handler.
+      ensure
+        if handled == :error
+          # If handled is :error, something bad happened.
+          context.response.respond_with_status(500)
+        else
+          context.response.respond_with_status(200)
+        end
       end
-
     end
   end
 end

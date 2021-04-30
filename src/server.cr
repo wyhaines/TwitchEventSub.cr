@@ -14,13 +14,14 @@ module TwitchEventSub
       secrets,
       @host : String = "127.0.0.1",
       @port : Int32 = 8080,
-      @context : OpenSSL::SSL::Context::Server? = nil
+      @context : OpenSSL::SSL::Context::Server? = nil,
+      handler = TwitchEventSub::HttpServer::TwitchHandler
     )
       @server = HTTP::Server.new([
         HTTP::ErrorHandler.new,
         HTTP::LogHandler.new,
         HTTP::CompressHandler.new,
-        TwitchEventSub::HttpServer::TwitchHandler.new(secrets),
+        handler.new(secrets),
       ])
       bind_server
     end
