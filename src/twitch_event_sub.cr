@@ -50,18 +50,42 @@ module TwitchEventSub
       UUID.random.to_s
     end
 
-    def subscribe(type : String, channel : String)
+    def condition(type, id, other_parameters) : Hash(String, String)
+      case type
+      when "channel.raid"
+        {"to_broadcaster_user_id" => id}
+      when "user.update"
+        {"user_id" => id}
+      else
+        {"broadcaster_user_id" => id}.merge(other_parameters)
+      end
+    end
+
+    def subscribe(
+      type : String,
+      channel : String,
+      other_parameters : Hash(String, String) = {} of String => String
+    )
       id = broadcast_channel_id(channel)
       return if id.nil?
 
       secret = generate_secret
-      response = send_subscription_request(id, type: type, channel: channel, secret: secret)
+      response = send_subscription_request(
+        id,
+        type: type,
+        channel: channel,
+        secret: secret,
+        condition: condition(
+          type: type,
+          id: id,
+          other_parameters: other_parameters)
+      )
       return unless verification_pending?(response)
 
       # Save the secret that was used.
       response_params = TwitchEventSubSubscriptions.from_json(response.body)
-      response_params["data"].as_a.each do |subscription|
-        secrets[subscription.as_h["id"]] = secret
+      response_params.data.each do |subscription|
+        secrets[subscription.id] = secret
       end
     end
 
@@ -73,10 +97,40 @@ module TwitchEventSub
       )
     end
 
-    private def send_subscription_request(id : String, type : String, channel : String, secret : String)
+    # The Twitch documentation specifically states:
+    #   *No authorization required.*
+    # For the six subscription types in the first when clause.
+    # Experimentally, though, this seems to not be the case.
+    # Both `channel.follow` and `user.update` have been shown
+    # to require oauth authentication or they error.
+    # This code is being retained for the moment in case it turns
+    # out that I am just badly misunderstanding something, and'
+    # this code can still be used. However, this method is likely
+    # going to be removed in the near future.
+    private def headers_for(type : String) : HTTP::Headers
+      case type
+      when "channel.update",
+           "channel.follow",
+           "channel.raid",
+           "stream.online",
+           "stream.offline",
+           "user.update"
+        headers(auth_headers, json_content_type_header)
+      else
+        headers(auth_headers, json_content_type_header)
+      end
+    end
+
+    private def send_subscription_request(
+      id : String,
+      type : String,
+      channel : String,
+      secret : String,
+      condition : Hash(String, String) = {"broadcaster_user_id" => id}
+    )
       subscription_request = TwitchSubscriptionRequest.blank_obj
       subscription_request.type = type
-      subscription_request.condition = {"broadcaster_user_id" => id}
+      subscription_request.condition = condition
       subscription_request.transport = {
         "method"   => "webhook",
         "callback" => "https://wyhaines.pagekite.me/eventsub/subscription",
@@ -86,11 +140,14 @@ module TwitchEventSub
       url = "#{EVENTSUB_ENDPOINT}subscriptions"
       post(
         url: url,
-        body: subscription_request.to_json
+        body: subscription_request.to_json,
+        headers: headers_for(type)
       )
     end
 
     def verification_pending?(response)
+      puts "verification_pending?"
+      puts response.inspect
       status = JSON.parse(response.body)["data"][0]["status"].as_s
       puts status
       status == "webhook_callback_verification_pending"
@@ -132,25 +189,25 @@ module TwitchEventSub
       merged_headers
     end
 
-    def get(url)
+    def get(url, headers = auth_headers)
       HTTP::Client.get(
         url: url,
-        headers: auth_headers
+        headers: headers
       )
     end
 
-    def post(url, body)
+    def post(url, body, headers = headers(auth_headers, json_content_type_header))
       HTTP::Client.post(
         url: url,
-        headers: headers(auth_headers, json_content_type_header),
+        headers: headers,
         body: body
       )
     end
 
-    def delete(url, body)
+    def delete(url, body, headers = headers(auth_headers, json_content_type_header))
       HTTP::Client.delete(
         url: url,
-        headers: headers(auth_headers, json_content_type_header),
+        headers: headers,
         body: body
       )
     end
@@ -159,6 +216,10 @@ end
 
 class TestHandler < TwitchEventSub::HttpServer::TwitchHandler
   def handle_channel_follow(params)
+    puts params.inspect
+  end
+
+  def handle_user_update(params)
     puts params.inspect
   end
 end
@@ -179,8 +240,8 @@ slist.data.each do |sub|
 end
 
 pp subs.list
-# puts "authenticate"
-# subs.broadcast_channel_id("wyhaines")
-# puts "subscribe"
-# subs.subscribe("channel.follow", "wyhaines")
+puts "authenticate"
+subs.broadcast_channel_id("wyhaines")
+puts "subscribe"
+subs.subscribe("user.update", "wyhaines")
 subs.server_finished_running.receive
