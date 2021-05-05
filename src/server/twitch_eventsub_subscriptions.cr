@@ -44,7 +44,7 @@ module TwitchEventSub
     @[JSON::Field(key: "max_total_cost")]
     property max_total_cost : Int32 = 0
 
-    @[JSON::Field(key: "pagination")]
-    property pagination : Hash(String, String)
+    @[JSON::Field(key: "pagination", emit_null: true)]
+    property pagination : Hash(String, String)?
   end
 end

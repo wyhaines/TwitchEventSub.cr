@@ -53,27 +53,35 @@ module TwitchEventSub
     def condition(type, id, other_parameters) : Hash(String, String)
       case type
       when "channel.raid"
-        {"to_broadcaster_user_id" => id}
+        {"to_broadcaster_user_id" => id.to_s}
       when "user.update"
-        {"user_id" => id}
+        {"user_id" => id.to_s}
       else
-        {"broadcaster_user_id" => id}.merge(other_parameters)
+        {"broadcaster_user_id" => id.to_s}.merge(other_parameters)
       end
     end
 
     def subscribe(
       type : String,
-      channel : String,
+      channel_or_id : String | Int,
       other_parameters : Hash(String, String) = {} of String => String
     )
-      id = broadcast_channel_id(channel)
+      unless channel_or_id.is_a?(Int32)
+        if channel_or_id.is_a?(String)
+          unless id = channel_or_id.to_i32?
+            id = broadcast_channel_id(channel_or_id)
+          else
+            id = channel_or_id.to_i32
+          end
+        end
+      else
+        id = channel_or_id
+      end
       return if id.nil?
 
       secret = generate_secret
       response = send_subscription_request(
-        id,
         type: type,
-        channel: channel,
         secret: secret,
         condition: condition(
           type: type,
@@ -122,11 +130,9 @@ module TwitchEventSub
     end
 
     private def send_subscription_request(
-      id : String,
       type : String,
-      channel : String,
       secret : String,
-      condition : Hash(String, String) = {"broadcaster_user_id" => id}
+      condition : Hash(String, String) = {} of String => String
     )
       subscription_request = TwitchSubscriptionRequest.blank_obj
       subscription_request.type = type
@@ -136,7 +142,7 @@ module TwitchEventSub
         "callback" => "https://wyhaines.pagekite.me/eventsub/subscription",
         "secret"   => secret,
       }
-
+      pp subscription_request
       url = "#{EVENTSUB_ENDPOINT}subscriptions"
       post(
         url: url,
@@ -146,10 +152,7 @@ module TwitchEventSub
     end
 
     def verification_pending?(response)
-      puts "verification_pending?"
-      puts response.inspect
       status = JSON.parse(response.body)["data"][0]["status"].as_s
-      puts status
       status == "webhook_callback_verification_pending"
     end
 
@@ -213,35 +216,3 @@ module TwitchEventSub
     end
   end
 end
-
-class TestHandler < TwitchEventSub::HttpServer::TwitchHandler
-  def handle_channel_follow(params)
-    puts params.inspect
-  end
-
-  def handle_user_update(params)
-    puts params.inspect
-  end
-end
-
-subs = TwitchEventSub::Subscriptions.new(
-  client_id: "020dnmxyu7eqpinwpkp9fnnlwa9igy",
-  authorization: ENV["TWITCH_APP_ACCESS_TOKEN"],
-  handler: TestHandler
-)
-
-slist = subs.list
-pp slist
-slist.data.each do |sub|
-  next unless sub.status == "webhook_callback_verification_failed"
-  puts "UNSUBSCRIBE:"
-  pp sub
-  subs.unsubscribe(sub)
-end
-
-pp subs.list
-puts "authenticate"
-subs.broadcast_channel_id("wyhaines")
-puts "subscribe"
-subs.subscribe("user.update", "wyhaines")
-subs.server_finished_running.receive

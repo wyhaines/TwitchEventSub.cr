@@ -51,7 +51,7 @@ module TwitchEventSub
 
         challenge = params["challenge"]?
         if challenge
-          if signature_matches?(request, body)
+          if signature_matches?(request, body, params)
             context.response.status_code = 200
             context.response.write challenge.as_s.to_slice
             context.response.flush
@@ -63,25 +63,31 @@ module TwitchEventSub
       end
 
       def secret(id)
+        pp @secrets
         @secrets[id]
       end
 
       # Compare the signature passed as a param to the HMAC-SHA256 signature
       # that is calculated from the message contents to ensure that they
       # match.
-      def signature_matches?(request, body)
+      # TODO: Make this method look at the HMAC encoding technique that Twitch
+      # indicates was used in the signature. i.e.
+      # `sha256=0036753bef53872d35c7f24643abaacd95c554d371d563df37eb9d721c457892`
+      # and dynamically use the same one. That way, if Twitch changes to a
+      # different algorithm, the system will not need any changes to use the new
+      # one.
+      def signature_matches?(request, body, params)
         message_id = request.headers["Twitch-Eventsub-Message-Id"]
         calculated_signature = OpenSSL::HMAC.hexdigest(
           OpenSSL::Algorithm::SHA256,
-          secret(message_id),
+          secret(params["subscription"]["id"]),
           message_id +
           request.headers["Twitch-Eventsub-Message-Timestamp"] +
           body
         )
 
         signature = request.headers["Twitch-Eventsub-Message-Signature"]
-
-        signature == calculated_signature
+        signature == "sha256=#{calculated_signature}"
       end
 
       macro dispatch(type, params)
@@ -101,7 +107,7 @@ module TwitchEventSub
         return if body.nil?
 
         handled = true
-        handled = dispatch(params["type"].as_s.tr(".", "_"), params)
+        handled = dispatch(params["subscription"]["type"].as_s.tr(".", "_"), params)
       rescue NotImplementedError
         # Do nothing if the notification type does not have a handler.
       ensure
