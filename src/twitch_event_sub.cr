@@ -185,7 +185,7 @@ module TwitchEventSub
       shiftable_hdrs = hdrs.to_a
       merged_headers = shiftable_hdrs.shift
 
-      while shiftable_hdrs.any?
+      while !shiftable_hdrs.empty?
         merged_headers.merge! shiftable_hdrs.shift
       end
 

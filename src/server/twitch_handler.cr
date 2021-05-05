@@ -90,11 +90,11 @@ module TwitchEventSub
         signature == "sha256=#{calculated_signature}"
       end
 
-      macro dispatch(type, params)
+      macro dispatch(type, request, params)
         case {{ type.id }}
         {% for method in @type.methods %}
           {% if method.name =~ /^handle_/ %}
-        when "{{ method.name.gsub(/^handle_/, "") }}" then {{ method.name.id }}({{ params.id }})
+        when "{{ method.name.gsub(/^handle_/, "") }}" then {{ method.name.id }}({{ request.id }}, {{ params.id }})
           {% end %}
         {% end %}
         else
@@ -107,10 +107,11 @@ module TwitchEventSub
         return if body.nil?
 
         handled = true
-        handled = dispatch(params["subscription"]["type"].as_s.tr(".", "_"), params)
+        handled = dispatch(params["subscription"]["type"].as_s.tr(".", "_"), request, params)
       rescue NotImplementedError
         # Do nothing if the notification type does not have a handler.
       ensure
+        # TODO: Make this error handling a bit more configurable.
         if handled == :error
           # If handled is :error, something bad happened.
           context.response.respond_with_status(500)
