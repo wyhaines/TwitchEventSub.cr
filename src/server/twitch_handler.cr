@@ -90,6 +90,34 @@ module TwitchEventSub
         signature == "sha256=#{calculated_signature}"
       end
 
+      macro list_handlers
+        %w(
+        {% for method in @type.methods %}
+          {% if method.name =~ /^handle_/ %}
+          {{ method.name }}
+          {% end %}
+        {% end %}
+        )
+      end
+
+      def self.twitch_subscription_handlers
+        list_handlers
+      end
+
+      macro list_handler_commands
+        %w(
+        {% for method in @type.methods %}
+          {% if method.name =~ /^handle_/ %}
+          {{ method.name.gsub(/^handle_/, "").tr("_", ".") }}
+          {% end %}
+        {% end %}
+        )
+      end
+
+      def self.twitch_subscription_handler_commands
+        list_handler_commands
+      end
+
       macro dispatch(type, request, params)
         case {{ type.id }}
         {% for method in @type.methods %}
