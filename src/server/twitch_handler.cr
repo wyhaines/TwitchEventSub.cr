@@ -13,7 +13,10 @@ module TwitchEventSub
     class TwitchHandler
       include HTTP::Handler
 
-      def initialize(@secrets : SecretSuperclass)
+      def initialize(
+        @secrets : SecretSuperclass,
+        @notifications : Channel(Nil) = Channel(Nil).new
+        )
         super()
       end
 
@@ -70,26 +73,33 @@ module TwitchEventSub
       # Compare the signature passed as a param to the HMAC-SHA256 signature
       # that is calculated from the message contents to ensure that they
       # match.
-      # TODO: Make this method look at the HMAC encoding technique that Twitch
-      # indicates was used in the signature. i.e.
-      # `sha256=0036753bef53872d35c7f24643abaacd95c554d371d563df37eb9d721c457892`
-      # and dynamically use the same one. That way, if Twitch changes to a
-      # different algorithm, the system will not need any changes to use the new
-      # one.
       def signature_matches?(request, body, params)
         message_id = request.headers["Twitch-Eventsub-Message-Id"]
+        signature = request.headers["Twitch-Eventsub-Message-Signature"]
+        algorithm = algorithm_from_signature(signature)
         calculated_signature = OpenSSL::HMAC.hexdigest(
-          OpenSSL::Algorithm::SHA256,
+          algorithm,
           secret(params["subscription"]["id"]),
           message_id +
           request.headers["Twitch-Eventsub-Message-Timestamp"] +
           body
         )
 
-        signature = request.headers["Twitch-Eventsub-Message-Signature"]
-        signature == "sha256=#{calculated_signature}"
+        signature == "#{algorithm}=#{calculated_signature}"
       end
 
+      # Determine the correct algorithm to use from the signature that
+      # Twitch sends. This way, if or when they switch from SHA256, the
+      # library should continue working without any required changes.
+      def algorithm_from_signature(signature)
+        alg, sig = signature.split("=",2)
+        # If it has to use the default, it will probably fail, but
+        # we will put a default here anyway.
+        OpenSSL::Algorithm.parse(alg) || OpenSSL::Algorithm::SHA256
+      end
+
+      # This macro generates an array of all of the handler method
+      # names in the class.
       macro list_handlers
         %w(
         {% for method in @type.methods %}
@@ -100,10 +110,14 @@ module TwitchEventSub
         )
       end
 
+      # This returns an array of all of the handler method names
+      # in the class.
       def self.twitch_subscription_handlers
         list_handlers
       end
 
+      # This macros generates an array of all of the Twitch events
+      # that this class can handle.
       macro list_handler_commands
         %w(
         {% for method in @type.methods %}
@@ -114,10 +128,15 @@ module TwitchEventSub
         )
       end
 
+      # This method returns an array of all of the Twitch events
+      # that this class can handle.
       def self.twitch_subscription_handler_commands
         list_handler_commands
       end
 
+      # This macro generates a case statement so that the correct
+      # method can be called to handle the given twitch subscription
+      # type.
       macro dispatch(type, request, params)
         case {{ type.id }}
         {% for method in @type.methods %}

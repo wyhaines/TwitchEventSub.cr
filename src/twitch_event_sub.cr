@@ -105,6 +105,18 @@ module TwitchEventSub
       )
     end
 
+    def flush_failed_subscriptions
+      subscriptions = list
+      unsubscribed = [] of TwitchEventSub::Subscription
+      subscription.data.each do |sub|
+        next unless sub.status == "webhook_callback_verification_failed"
+        subs.unsubscribe(sub)
+        unsubscribed << sub
+      end
+
+      unsubscribed
+    end
+
     # The Twitch documentation specifically states:
     #   *No authorization required.*
     # For the six subscription types in the first when clause.
